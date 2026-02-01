@@ -1,0 +1,114 @@
+---
+- name: Setup Music Server on Armbian
+  hosts: music_servers
+  become: yes
+  ignore_errors: yes
+  tasks:
+    - name: apt update
+      apt:
+        update_cache: yes
+
+    - name: install mpd and dependencies
+      apt:
+        name:
+          - mpd
+          - gnupg
+          - vim
+        state: present
+
+    # myMPD repository
+    - name: add myMPD signing key
+      shell: |
+        curl -fsSL https://download.opensuse.org/repositories/home:/jcorporation/Debian_12/Release.key | gpg --dearmor -o /usr/share/keyrings/mympd.gpg
+      args:
+        creates: /usr/share/keyrings/mympd.gpg
+
+    - name: add myMPD repository
+      copy:
+        dest: /etc/apt/sources.list.d/mympd.list
+        content: |
+          deb [signed-by=/usr/share/keyrings/mympd.gpg] https://download.opensuse.org/repositories/home:/jcorporation/Debian_12/ /
+
+    - name: install myMPD
+      apt:
+        name: mympd
+        state: present
+        update_cache: yes
+
+    - name: set myMPD http port
+      copy:
+        dest: /var/lib/mympd/config/http_port
+        content: "80"
+        owner: mympd
+        group: mympd
+      notify: restart_mympd
+
+    - name: set myMPD ssl port
+      copy:
+        dest: /var/lib/mympd/config/ssl_port
+        content: "443"
+        owner: mympd
+        group: mympd
+      notify: restart_mympd
+
+    - name: setup mpd
+      lineinfile:
+        path: /etc/mpd.conf
+        regexp: '^bind_to_address'
+        line: 'bind_to_address "any"'
+      notify: restart_mpd
+
+    - name: add user to audio group
+      user:
+        name: "{{ ansible_user }}"
+        groups: audio
+        append: yes
+
+    - name: set music directory permissions
+      file:
+        path: /var/lib/mpd/music
+        state: directory
+        owner: mpd
+        group: audio
+        mode: "0775"
+
+    - name: start mpd and mympd
+      systemd:
+        name: "{{ item }}"
+        enabled: yes
+        state: started
+      loop:
+        - mpd
+        - mympd
+
+    - name: hostname
+      hostname:
+        name: "{{ sbc_hostname }}"
+
+    - name: edit /etc/hosts
+      lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ sbc_hostname }}"
+
+    - name: Install Avahi(mDNS)
+      apt:
+        name: avahi-daemon
+        state: present
+
+    - name: start avahi
+      systemd:
+        name: avahi-daemon
+        enabled: yes
+        state: started
+
+  handlers:
+    - name: restart_mpd
+      service:
+        name: mpd
+        state: restarted
+
+    - name: restart_mympd
+      service:
+        name: mympd
+        state: restarted
