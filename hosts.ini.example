@@ -1,0 +1,2 @@
+[music_servers]
+192.168.0.252 ansible_user=your_name sbc_hostname=music ssh_pubkey_path=~/.ssh/id_rsa.pub
