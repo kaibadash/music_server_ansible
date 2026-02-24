@@ -54,7 +54,7 @@
           audio_output {
               type "alsa"
               name "USB Speaker"
-              device "hw:0,0"
+              device "hw:CARD=Speaker,DEV=0"
           }
       notify: restart_mpd
 
